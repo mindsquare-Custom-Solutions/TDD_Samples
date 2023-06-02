@@ -1,3 +1,5 @@
+<img src="https://mindsquare.de/files/logo-mindsquare-176x781.png" alt="mindsquare Logo" title="mindsquare AG" align="right">
+
 # Begleitmaterialien zur Test Driven Development (TDD) Schulung
 
 Codebeispiele für die [mindsquare Test Driven Development Schulung](https://mindsquare.de/schulung/test-driven-development-mit-abap-unit/)
