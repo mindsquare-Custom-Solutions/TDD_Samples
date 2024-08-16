@@ -1039,3 +1039,190 @@ CLASS ltcl_constructor_inject_ootdf IMPLEMENTATION.
   ENDMETHOD.
 ENDCLASS.
 ```
+
+### Authorization Test Double Framework
+
+Testklasse
+```abap
+
+CLASS ltc_filter_unauthorized DEFINITION FINAL
+  FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+
+  PRIVATE SECTION.
+    METHODS unauthorized FOR TESTING RAISING cx_static_check.
+    METHODS teardown.
+    METHODS setup.
+
+    METHODS prepare_test_data IMPORTING variant         TYPE etvar_id
+                              RETURNING VALUE(bookings) TYPE ztttdd_booking.
+
+    CLASS-METHODS class_setup.
+
+    CLASS-DATA auth_controller TYPE REF TO if_aunit_auth_check_controller.
+
+    DATA cut TYPE REF TO zcl_msq_tdd_authorization.
+ENDCLASS.
+
+
+CLASS ltc_filter_unauthorized IMPLEMENTATION.
+  METHOD unauthorized.
+    " given
+    DATA(bookings) = prepare_test_data( 'UNAUTHORIZED' ).
+
+    DATA(role_carrier_unauthorized) = VALUE cl_aunit_auth_check_types_def=>role_auth_objects(
+        ( object         = 'Z_CARRIER'
+          authorizations = VALUE #( ( VALUE #(
+            ( fieldname = 'ACTVT' fieldvalues = VALUE #( ( lower_value = '03' ) ) )
+            ( fieldname = 'ZMSQ_CARRI' fieldvalues = VALUE #( ) )
+          ) ) ) ) ).
+
+    DATA(user_role) = VALUE cl_aunit_auth_check_types_def=>user_role_authorizations(
+                                ( role_authorizations = role_carrier_unauthorized ) ).
+    DATA(auth_object_set) = cl_aunit_authority_check=>create_auth_object_set( user_role ).
+    auth_controller->restrict_authorizations_to( auth_object_set ).
+
+    " when
+    DATA(result) = cut->filter_unauthorized_bookings( bookings ).
+
+    " then
+    auth_controller->get_auth_check_execution_log( )->get_execution_status( IMPORTING failed_execution = DATA(failed)
+                                                                                      passed_execution = DATA(passed) ).
+
+    cl_abap_unit_assert=>assert_initial( passed ).
+    cl_abap_unit_assert=>assert_not_initial( failed ).
+
+    cl_abap_unit_assert=>assert_initial(
+        act = result
+        msg = 'Es wurden Daten zurückgegeben, obwohl keine Berechtigungen erteilt sind' ).
+  ENDMETHOD.
+
+  METHOD class_setup.
+    auth_controller = cl_aunit_authority_check=>get_controller( ).
+  ENDMETHOD.
+
+  METHOD teardown.
+    auth_controller->reset( ).
+  ENDMETHOD.
+
+  METHOD prepare_test_data.
+    TRY.
+        DATA(tdc_api) = cl_apl_ecatt_tdc_api=>get_instance( 'ZTDC_MSQ_AUTHORIZATION' ).
+        tdc_api->get_value( EXPORTING i_param_name   = 'BOOKINGS'
+                                      i_variant_name = variant
+                            CHANGING  e_param_value  = bookings ).
+      CATCH cx_ecatt_tdc_access INTO DATA(cx).
+        cl_abap_unit_assert=>fail( msg = cx->get_text( ) ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD setup.
+    cut = NEW #( ).
+  ENDMETHOD.
+ENDCLASS.
+```
+
+### Function Module Test Double Framework
+
+Testklasse
+```abap
+CLASS ltc_convert_2_currency DEFINITION FINAL FOR TESTING
+  DURATION SHORT
+  RISK LEVEL HARMLESS.
+
+  PRIVATE SECTION.
+    METHODS one_booking_usd_2_eur FOR TESTING RAISING cx_static_check.
+    METHODS one_booking_conversion_failed FOR TESTING RAISING cx_static_check.
+    METHODS setup.
+    CLASS-METHODS class_setup.
+
+    CONSTANTS _test_data_container TYPE etobj_name VALUE 'ZTDC_MSQ_TDD_FM_CONV_2_CURR'.
+    CONSTANTS _fixture_param       TYPE etpar_name VALUE 'FIXTURE'.
+    CONSTANTS _expected_param      TYPE etpar_name VALUE 'EXPECTED'.
+
+    DATA _cut                TYPE REF TO zcl_msq_tdd_fm.
+    CLASS-DATA _fm_test_enviroment TYPE REF TO if_function_test_environment .
+
+    METHODS get_fixture
+      IMPORTING i_variant     TYPE etvar_id
+      RETURNING VALUE(result) TYPE ztdc_msq_tdd_fm_conv_2_curr_fix
+      RAISING   cx_ecatt_tdc_access.
+
+    METHODS get_expected
+      IMPORTING i_variant     TYPE etvar_id
+      RETURNING VALUE(result) TYPE ztdc_msq_tdd_fm_conv_2_curr_exp
+      RAISING   cx_ecatt_tdc_access.
+ENDCLASS.
+
+
+CLASS ltc_convert_2_currency IMPLEMENTATION.
+
+  METHOD setup.
+    _cut = NEW zcl_msq_tdd_fm( ).
+
+    _fm_test_enviroment->clear_doubles( ).
+  ENDMETHOD.
+
+  METHOD one_booking_conversion_failed.
+    TRY.
+        DATA(fixtures) = get_fixture( 'ONE_BOOKING_CONVERSION_FAILED' ).
+        DATA(expected) = get_expected( 'ONE_BOOKING_CONVERSION_FAILED' ).
+      CATCH cx_ecatt_tdc_access.
+        cl_abap_unit_assert=>fail( 'Testdata not accessible' ).
+    ENDTRY.
+
+    " given
+
+
+    " when
+    DATA(converted_bookings) = _cut->convert_2_currency( bookings         = fixtures-bookings
+                                                         display_currency = fixtures-display_currency ).
+
+    " then
+    cl_abap_unit_assert=>assert_equals( exp = expected-bookings
+                                        act = converted_bookings
+                                        msg = 'Currency conversion wrong' ).
+  ENDMETHOD.
+
+  METHOD one_booking_usd_2_eur.
+    TRY.
+        DATA(fixtures) = get_fixture( 'ONE_BOOKING_USD_2_EUR' ).
+        DATA(expected) = get_expected( 'ONE_BOOKING_USD_2_EUR' ).
+      CATCH cx_ecatt_tdc_access.
+        cl_abap_unit_assert=>fail( 'Testdata not accessible' ).
+    ENDTRY.
+
+    " given
+
+
+    " when
+    DATA(converted_bookings) = _cut->convert_2_currency( bookings         = fixtures-bookings
+                                                         display_currency = fixtures-display_currency ).
+
+    " then
+    cl_abap_unit_assert=>assert_equals( exp = expected-bookings
+                                        act = converted_bookings
+                                        msg = 'Currency conversion wrong' ).
+  ENDMETHOD.
+
+  METHOD get_expected.
+    DATA(tdc_ref) = cl_apl_ecatt_tdc_api=>get_instance( _test_data_container ).
+
+    tdc_ref->get_value( EXPORTING i_param_name   = _expected_param
+                                  i_variant_name = i_variant
+                        CHANGING  e_param_value  = result ).
+  ENDMETHOD.
+
+  METHOD get_fixture.
+    DATA(tdc_ref) = cl_apl_ecatt_tdc_api=>get_instance( _test_data_container ).
+
+    tdc_ref->get_value( EXPORTING i_param_name   = _fixture_param
+                                  i_variant_name = i_variant
+                        CHANGING  e_param_value  = result ).
+  ENDMETHOD.
+
+  METHOD class_setup.
+    _fm_test_enviroment = cl_function_test_environment=>create( function_modules = VALUE #( ( 'Z_TDD_CONV_CURR' ) ) ).
+  ENDMETHOD.
+
+ENDCLASS.
+```
