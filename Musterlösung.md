@@ -1226,3 +1226,158 @@ CLASS ltc_convert_2_currency IMPLEMENTATION.
 
 ENDCLASS.
 ```
+
+### CDS Test Double Framework
+
+Testklasse
+```abap
+"!@testing ZC_MSQ_FLIGHTUTILISATION
+CLASS ltc_ZC_MSQ_FLIGHTUTILISATION
+DEFINITION FINAL FOR TESTING
+DURATION SHORT
+RISK LEVEL HARMLESS.
+  PRIVATE SECTION.
+
+    CLASS-DATA:
+      environment TYPE REF TO if_cds_test_environment.
+
+    CLASS-METHODS:
+      "! In CLASS_SETUP, corresponding doubles and clone(s) for the CDS view under test and its dependencies are created.
+      class_setup RAISING cx_static_check,
+      "! In CLASS_TEARDOWN, Generated database entities (doubles & clones) should be deleted at the end of test class execution.
+      class_teardown.
+
+    DATA:
+      act_results                   TYPE STANDARD TABLE OF zc_msq_flightutilisation WITH EMPTY KEY,
+      lt_zmind2e_i_carrier          TYPE STANDARD TABLE OF zmind2e_i_carrier WITH EMPTY KEY,
+      lt_zmind2e_i_flight           TYPE STANDARD TABLE OF zmind2e_i_flight WITH EMPTY KEY,
+      lt_zmind2e_i_connection       TYPE STANDARD TABLE OF zmind2e_i_connection WITH EMPTY KEY,
+      lt_zc_msq_flightutilbookingsu TYPE STANDARD TABLE OF zc_msq_flightutilbookingsum WITH EMPTY KEY,
+      lt_zi_msq_flightutilbookingsu TYPE STANDARD TABLE OF zi_msq_flightutilbookingsum WITH EMPTY KEY.
+
+    METHODS:
+      "! SETUP method creates a common start state for each test method,
+      "! clear_doubles clears the test data for all the doubles used in the test method before each test method execution.
+      setup RAISING cx_static_check,
+      prepare_testdata_set,
+      "!  In this method test data is inserted into the generated double(s) and the test is executed and
+      "!  the results should be asserted with the actuals.
+      none_authroized FOR TESTING RAISING cx_static_check,
+    authorized_only_aa FOR TESTING RAISING cx_static_check,
+    authorized_only_fra FOR TESTING RAISING cx_static_check.
+
+ENDCLASS.
+
+
+CLASS ltc_ZC_MSQ_FLIGHTUTILISATION IMPLEMENTATION.
+  METHOD class_setup.
+    environment = cl_cds_test_environment=>create( i_for_entity = 'ZC_MSQ_FLIGHTUTILISATION' ).
+    environment->enable_double_redirection( ).
+  ENDMETHOD.
+
+  METHOD setup.
+    environment->clear_doubles( ).
+  ENDMETHOD.
+
+  METHOD class_teardown.
+    environment->destroy( ).
+  ENDMETHOD.
+
+  METHOD authorized_only_fra.
+    DATA expected TYPE STANDARD TABLE OF zc_msq_flightutilisation WITH EMPTY KEY.
+
+    prepare_testdata_set( ).
+
+    DATA(acm_data_only_aa) = cl_cds_test_data=>create_access_control_data(
+        i_role_authorizations = VALUE #( ( object         = 'Z_AIRPORT'
+                                           authorizations = VALUE #(
+                                               ( VALUE #( ( fieldname   = 'ZMSQ_AIRP'
+                                                            fieldvalues = VALUE #( ( lower_value = 'FRA' ) ) ) ) ) ) ) ) ).
+    environment->get_access_control_double( )->enable_access_control( i_access_control_data = acm_data_only_aa ).
+
+    expected = VALUE #( ( CarrierId    = 'AA'
+                          ConnectionId = '1'
+                          DepartureAirport = 'FRA'
+                          DestinationAirport = 'NYC'
+                          FlightDate   = '20230101' ) ).
+
+    SELECT * FROM zc_msq_flightutilisation INTO TABLE @act_results.
+
+    cl_abap_unit_assert=>assert_equals( exp = expected
+                                        act = act_results
+                                        msg = 'Unauthorized data accessible' ).
+  ENDMETHOD.
+
+  METHOD authorized_only_aa.
+    DATA expected TYPE STANDARD TABLE OF zc_msq_flightutilisation WITH EMPTY KEY.
+
+    prepare_testdata_set( ).
+
+    DATA(acm_data_only_aa) = cl_cds_test_data=>create_access_control_data(
+        i_role_authorizations = VALUE #( ( object         = 'Z_CARRIER'
+                                           authorizations = VALUE #(
+                                               ( VALUE #( ( fieldname   = 'ZMSQ_CARRI'
+                                                            fieldvalues = VALUE #( ( lower_value = 'AA' ) ) )
+                                                          ( fieldname   = 'ACTVT'
+                                                            fieldvalues = VALUE #( ( lower_value = '03' ) ) ) ) ) ) ) ) ).
+    environment->get_access_control_double( )->enable_access_control( i_access_control_data = acm_data_only_aa ).
+
+    expected = VALUE #( ( CarrierId    = 'AA'
+                          ConnectionId = '1'
+                          DepartureAirport = 'FRA'
+                          DestinationAirport = 'NYC'
+                          FlightDate   = '20230101' ) ).
+
+    SELECT * FROM zc_msq_flightutilisation INTO TABLE @act_results.
+
+    cl_abap_unit_assert=>assert_equals( exp = expected
+                                        act = act_results
+                                        msg = 'Unauthorized data accessible' ).
+  ENDMETHOD.
+
+  METHOD none_authroized.
+    prepare_testdata_set( ).
+
+    DATA(acm_data_no_authorizations) = cl_cds_test_data=>create_access_control_data(
+      i_role_authorizations = VALUE #( ) ).
+    environment->get_access_control_double( )->enable_access_control( i_access_control_data = acm_data_no_authorizations ).
+
+    SELECT * FROM zc_msq_flightutilisation INTO TABLE @act_results.
+
+    cl_abap_unit_assert=>assert_initial( act = act_results
+                                         msg = 'Unauthorized data accessible' ).
+  ENDMETHOD.
+
+  METHOD prepare_testdata_set.
+    " Prepare test data for 'zmind2e_i_flight'
+    lt_zmind2e_i_flight = VALUE #( FlightDate = '20230101'
+                                   ( CarrierId    = 'AA'
+                                     ConnectionId = '1' )
+                                   ( CarrierId    = 'LH'
+                                     ConnectionId = '2' ) ).
+    environment->insert_test_data( i_data = lt_zmind2e_i_flight ).
+
+    " Prepare test data for 'zmind2e_i_connection'
+    lt_zmind2e_i_connection = VALUE #( ( ConnectionId       = '1'
+                                         CarrierId          = 'AA'
+                                         DepartureAirport   = 'FRA'
+                                         DestinationAirport = 'NYC' )
+                                       ( ConnectionId       = '2'
+                                         CarrierId          = 'LH'
+                                         DepartureAirport   = 'SIN'
+                                         DestinationAirport = 'MUN' ) ).
+    environment->insert_test_data( i_data = lt_zmind2e_i_connection ).
+
+    " Prepare test data for 'zc_msq_flightutilbookingsum'
+    " TODO: Provide the test data here
+    lt_zc_msq_flightutilbookingsu = VALUE #( ( ) ).
+    environment->insert_test_data( i_data = lt_zc_msq_flightutilbookingsu ).
+
+    " Prepare test data for 'zi_msq_flightutilbookingsum'
+    " TODO: Provide the test data here
+    lt_zi_msq_flightutilbookingsu = VALUE #( ( ) ).
+    environment->insert_test_data( i_data = lt_zi_msq_flightutilbookingsu ).
+  ENDMETHOD.
+
+ENDCLASS.
+```
