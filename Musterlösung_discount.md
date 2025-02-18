@@ -1,5 +1,5 @@
 ### Global Class
-´´´
+```
 CLASS zcl_se_discount DEFINITION
   PUBLIC
   FINAL
@@ -42,10 +42,10 @@ CLASS zcl_se_discount IMPLEMENTATION.
     result = lv_total_discount.
   ENDMETHOD.
 ENDCLASS.
-´´´
+```
 
 ### Test Class
-´´´
+```
 class ltc_discount definition final for testing
   duration short
   risk level harmless.
@@ -124,4 +124,4 @@ class ltc_discount implementation.
                                         msg = 'Expected no discount for booking status "X" (canceled)' ).
   ENDMETHOD.
 ENDCLASS.
-´´´
+```
